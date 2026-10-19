@@ -223,7 +223,7 @@ namespace encoding
   protected:
     const std::string &string;
   public:
-    explicit proxy<from, to>(const std::string &string)
+    explicit proxy(const std::string &string)
     : string(string)
     { }
     friend std::ostream &operator << <>(std::ostream &, const proxy<from, to> &);

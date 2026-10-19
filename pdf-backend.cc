@@ -48,11 +48,7 @@
  * ======================
  */
 
-#if POPPLER_VERSION >= 8500
 static void poppler_error_handler(ErrorCategory category, pdf::Offset pos, const char *message)
-#else
-static void poppler_error_handler(void *data, ErrorCategory category, pdf::Offset pos, const char *message)
-#endif
 {
   const char *category_name = _("PDF error");
   switch (category)
@@ -97,25 +93,11 @@ static void poppler_error_handler(void *data, ErrorCategory category, pdf::Offse
   error_log << std::endl;
 }
 
-#if POPPLER_VERSION < 7000
-static void poppler_error_handler(void *data, ErrorCategory category, pdf::Offset pos, char *message)
-{
-  poppler_error_handler(data, category, pos, const_cast<const char *>(message));
-}
-#endif
 
 pdf::Environment::Environment()
 {
-#if POPPLER_VERSION >= 8300
-  globalParams = std::unique_ptr<GlobalParams>(new GlobalParams);
-#else
-  globalParams = new GlobalParams;
-#endif
-#if POPPLER_VERSION >= 8500
+  globalParams = std::make_unique<GlobalParams>();
   setErrorCallback(poppler_error_handler);
-#else
-  setErrorCallback(poppler_error_handler, nullptr);
-#endif
 }
 
 void pdf::Environment::set_antialias(bool value)
@@ -129,11 +111,7 @@ void pdf::Environment::set_antialias(bool value)
  */
 
 pdf::Document::Document(const std::string &file_name)
-#if POPPLER_VERSION >= 220300
 : ::PDFDoc(std::make_unique<pdf::String>(file_name.c_str()))
-#else
-: ::PDFDoc(new pdf::String(file_name.c_str()))
-#endif
 {
   if (!this->isOk())
     throw LoadError();
@@ -163,7 +141,11 @@ static void cmyk_to_rgb(const double cmyk[], double rgb[])
   pdf::gfx::RgbColor rgb_cc;
   for (int i = 0; i < 4; i++)
     cmyk_cc.c[i] = pdf::gfx::double_as_color_component(cmyk[i]);
+#if POPPLER_VERSION_NUMBER >= 260600
+  cmyk_space.getRGB(cmyk_cc, &rgb_cc);
+#else
   cmyk_space.getRGB(&cmyk_cc, &rgb_cc);
+#endif
   rgb[0] = pdf::gfx::color_component_as_double(rgb_cc.r);
   rgb[1] = pdf::gfx::color_component_as_double(rgb_cc.g);
   rgb[2] = pdf::gfx::color_component_as_double(rgb_cc.b);
@@ -175,13 +157,13 @@ static bool annotations_callback(pdf::ant::Annotation *annotation, void *user_da
   std::string border_color;
   if (annotation->getType() != pdf::ant::Annotation::typeLink)
     return true;
-  pdf::ant::Color *color = annotation->getColor();
+  const pdf::ant::Color *color = annotation->getColor();
   if (color == nullptr)
   {
     border_colors.push_back("");
     return true;
   }
-  const double *values = color->getValues();
+  const auto &values = color->getValues();
   switch (color->getSpace())
   {
   case pdf::ant::Color::colorTransparent:
@@ -190,12 +172,12 @@ static bool annotations_callback(pdf::ant::Annotation *annotation, void *user_da
     border_color = html_color(values[0], values[0], values[0]);
     break;
   case pdf::ant::Color::colorRGB:
-    border_color = html_color(values);
+    border_color = html_color(values.data());
     break;
   case pdf::ant::Color::colorCMYK:
     {
       double rgb[3];
-      cmyk_to_rgb(values, rgb);
+      cmyk_to_rgb(values.data(), rgb);
       border_color = html_color(rgb);
     }
   }
@@ -231,15 +213,10 @@ void pdf::Document::get_page_size(int n, bool crop, double &width, double &heigh
 
 const std::string pdf::Document::get_xmp()
 {
-  std::unique_ptr<const pdf::String> mstring;
-#if POPPLER_VERSION >= 211000
-  mstring = this->readMetadata();
-#else
-  mstring.reset(this->readMetadata());
-#endif
-  if (mstring.get() == nullptr)
+  auto mstring = this->readMetadata();
+  if (!mstring)
     return "";
-  const char *cstring = pdf::get_c_string(mstring.get());
+  const char *cstring = mstring->c_str();
   if (strncmp(cstring, "<?xpacket begin=", 16) != 0)
     return "";
   cstring += 16;
@@ -470,7 +447,11 @@ void pdf::set_color(splash::Color &result, uint8_t r, uint8_t g, uint8_t b)
 bool pdf::Environment::antialias = false;
 
 pdf::Renderer::Renderer(pdf::splash::Color &paper_color, bool monochrome)
-: pdf::splash::OutputDevice(monochrome ? splashModeMono1 : splashModeRGB8, 4, false, paper_color),
+: pdf::splash::OutputDevice(monochrome ? splashModeMono1 : splashModeRGB8, 4,
+#if POPPLER_VERSION_NUMBER < 260200
+    false,
+#endif
+    paper_color),
   catalog(NULL)
 {
   this->setFontAntialias(pdf::Environment::antialias);
@@ -499,7 +480,13 @@ bool pdf::get_glyph(splash::Splash *splash, splash::Font *font,
   if (font == nullptr)
     return false;
   splash::ClipResult clip_result;
-  if (!font->getGlyph(code, 0, 0, bitmap, static_cast<int>(x), static_cast<int>(y), splash->getClip(), &clip_result))
+#if POPPLER_VERSION_NUMBER >= 260200
+  const auto &clip = splash->getClip();
+#else
+  // 26.01 exposes a const reference, but getGlyph still requires a pointer.
+  auto *clip = const_cast<SplashClip *>(&splash->getClip());
+#endif
+  if (!font->getGlyph(code, 0, 0, bitmap, static_cast<int>(x), static_cast<int>(y), clip, &clip_result))
     return false;
   return (clip_result != splashClipAllOutside);
 }
@@ -512,20 +499,16 @@ bool pdf::get_glyph(splash::Splash *splash, splash::Font *font,
 void pdf::Renderer::convert_path(pdf::gfx::State *state, splash::Path &splash_path)
 {
   /* Source was copied from <poppler/SplashOutputDev.c>. */
-  // for POPPLER_VERSION >= 8300:
-  //   const pdf::gfx::Path *path
   auto path = state->getPath();
   int n_subpaths = path->getNumSubpaths();
   for (int i = 0; i < n_subpaths; i++)
   {
-    // for POPPLER_VERSION >= 8300:
-    //   const pdf::gfx::Subpath *subpath
     auto subpath = path->getSubpath(i);
     if (subpath->getNumPoints() > 0)
     {
       double x1, y1, x2, y2, x3, y3;
       state->transform(subpath->getX(0), subpath->getY(0), &x1, &y1);
-      splash_path.moveTo(static_cast<splash::Coord>(x1), static_cast<splash::Coord>(y1));
+      splash_path.moveTo(x1, y1);
       int j = 1;
       int n_points = subpath->getNumPoints();
       while (j < n_points)
@@ -536,16 +519,16 @@ void pdf::Renderer::convert_path(pdf::gfx::State *state, splash::Path &splash_pa
           state->transform(subpath->getX(j + 1), subpath->getY(j + 1), &x2, &y2);
           state->transform(subpath->getX(j + 2), subpath->getY(j + 2), &x3, &y3);
           splash_path.curveTo(
-            static_cast<splash::Coord>(x1), static_cast<splash::Coord>(y1),
-            static_cast<splash::Coord>(x2), static_cast<splash::Coord>(y2),
-            static_cast<splash::Coord>(x3), static_cast<splash::Coord>(y3)
+            x1, y1,
+            x2, y2,
+            x3, y3
           );
           j += 3;
         }
         else
         {
           state->transform(subpath->getX(j), subpath->getY(j), &x1, &y1);
-          splash_path.lineTo(static_cast<splash::Coord>(x1), static_cast<splash::Coord>(y1));
+          splash_path.lineTo(x1, y1);
           j++;
         }
       }
@@ -627,25 +610,14 @@ namespace pdf
   }
 }
 
-#if POPPLER_VERSION >= 7200
 const char * pdf::get_c_string(const pdf::String *str)
 {
   return str->c_str();
 }
-#else
-const char * pdf::get_c_string(const pdf::String *str)
-{
-  return str->getCString();
-}
-#endif
 
 int pdf::find_page(pdf::Catalog *catalog, pdf::Ref pgref)
 {
-#if POPPLER_VERSION >= 7600
   return catalog->findPage(pgref);
-#else
-  return catalog->findPage(pgref.num, pgref.gen);
-#endif
 }
 
 // vim:ts=2 sts=2 sw=2 et

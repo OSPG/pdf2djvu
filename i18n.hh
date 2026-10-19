@@ -33,6 +33,8 @@ static inline void N_(const char *message_id)
 
 #include <libintl.h>
 
+namespace i18n { using ::ngettext; }
+
 static inline const char * _(const char *message_id)
 {
   return gettext(message_id);
@@ -40,9 +42,12 @@ static inline const char * _(const char *message_id)
 
 #else
 
+namespace i18n
+{
 static inline const char * ngettext(const char *message_id, const char *message_id_plural, unsigned long int n)
 {
   return n == 1 ? message_id : message_id_plural;
+}
 }
 
 static inline const char * _(const char *message_id)

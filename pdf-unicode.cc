@@ -49,7 +49,7 @@ std::string pdf::string_as_utf8(const pdf::String *string)
      */
     const static uint32_t replacement_character = 0xFFFD;
     const char *cstring = pdf::get_c_string(string);
-    size_t clength = string->getLength();
+    size_t clength = string->size();
     std::ostringstream stream;
     if (clength >= 2 && (cstring[0] & 0xFF) == 0xFE && (cstring[1] & 0xFF) == 0xFF) {
         /* UTF-16-BE Byte Order Mark */
@@ -101,6 +101,12 @@ std::string pdf::string_as_utf8(const pdf::String *string)
             write_as_utf8(stream, pdfDocEncoding[cstring[i] & 0xFF]);
     }
     return stream.str();
+}
+
+std::string pdf::string_as_utf8(const std::string &string)
+{
+    const pdf::String value(string);
+    return pdf::string_as_utf8(&value);
 }
 
 std::string pdf::string_as_utf8(pdf::Object &object)

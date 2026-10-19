@@ -33,13 +33,8 @@ protected:
     this->process_image(state, width, height);
   }
 
-#if POPPLER_VERSION >= 8200
   virtual void drawImage(pdf::gfx::State *state, pdf::Object *object, pdf::Stream *stream, int width, int height,
     pdf::gfx::ImageColorMap *color_map, bool interpolate, const int *mask_colors, bool inline_image)
-#else
-  virtual void drawImage(pdf::gfx::State *state, pdf::Object *object, pdf::Stream *stream, int width, int height,
-    pdf::gfx::ImageColorMap *color_map, bool interpolate, int *mask_colors, bool inline_image)
-#endif
   {
     this->process_image(state, width, height);
   }
@@ -91,7 +86,7 @@ public:
 
 void DpiGuessDevice::process_image(pdf::gfx::State *state, int width, int height)
 {
-  const double *ctm = state->getCTM();
+  const auto &ctm = state->getCTM();
   double h_dpi = 72.0 * width / hypot(ctm[0], ctm[1]);
   double v_dpi = 72.0 * height / hypot(ctm[2], ctm[3]);
   this->min_ = std::min(this->min_, std::min(h_dpi, v_dpi));

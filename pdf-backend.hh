@@ -63,7 +63,6 @@ namespace pdf
     typedef ::Splash Splash;
     typedef ::SplashColor Color;
     typedef ::SplashFont Font;
-    typedef ::SplashCoord Coord;
     typedef ::SplashPath Path;
     typedef ::SplashGlyphBitmap GlyphBitmap;
     typedef ::SplashBitmap Bitmap;
@@ -236,14 +235,10 @@ namespace pdf
         this->byte_width = width * 3;
         break;
       case splashModeXBGR8:
-#if POPPLER_VERSION >= 8100 || defined(SPLASH_CMYK)
       case splashModeCMYK8:
-#endif
         this->byte_width = width * 4;
         break;
-#if POPPLER_VERSION >= 8100 || defined(SPLASH_CMYK)
       case splashModeDeviceN8:
-#endif
       default:
         assert(0 && "unexpected splash mode");
       }
@@ -296,11 +291,7 @@ namespace pdf
     const std::string get_xmp();
     void get_doc_info(pdf::Object &info)
     {
-#if POPPLER_VERSION < 5800
-      this->getDocInfo(&info);
-#else
       info = this->getDocInfo();
-#endif
     }
     class LoadError : public std::runtime_error
     {
@@ -425,6 +416,10 @@ namespace pdf
   double get_path_area(pdf::splash::Path &path);
 
   const char * get_c_string(const pdf::String *str);
+  inline const char * get_c_string(const std::string &str)
+  {
+    return str.c_str();
+  }
 
   int find_page(pdf::Catalog *catalog, pdf::Ref pgref);
 

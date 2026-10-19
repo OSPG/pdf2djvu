@@ -41,9 +41,17 @@ pdf::DocumentMap::DocumentMap(const std::vector<const char *> &paths)
             std::unique_ptr<pdf::Document> doc(new pdf::Document(path));
             pdf::Catalog *catalog = doc->getCatalog();
             for (int i = 0; i < doc->getNumPages(); i++) {
+#if POPPLER_VERSION_NUMBER >= 260700
+                std::string s;
+#else
                 pdf::String s;
+#endif
                 if (catalog->indexToLabel(i, &s)) {
+#if POPPLER_VERSION_NUMBER >= 260700
+                    std::string str = pdf::string_as_utf8(s);
+#else
                     std::string str = pdf::string_as_utf8(&s);
+#endif
                     this->labels.push_back(str);
                 }
                 else

@@ -76,17 +76,10 @@ public:
 static int get_page_for_goto_link(pdf::link::GoTo *goto_link, pdf::Catalog *catalog)
 {
   std::unique_ptr<pdf::link::Destination> dest;
-#if POPPLER_VERSION >= 6400
-  const
-#endif
-  pdf::link::Destination *orig_dest = goto_link->getDest();
+  const pdf::link::Destination *orig_dest = goto_link->getDest();
   if (orig_dest == nullptr)
   {
-#if POPPLER_VERSION >= 8600
     dest = catalog->findDest(goto_link->getNamedDest());
-#else
-    dest.reset(catalog->findDest(goto_link->getNamedDest()));
-#endif
   }
   else
     dest.reset(new pdf::link::Destination(*orig_dest));
@@ -341,13 +334,8 @@ public:
     return;
   }
 
-#if POPPLER_VERSION >= 8200
   void drawImage(pdf::gfx::State *state, pdf::Object *object, pdf::Stream *stream, int width, int height,
     pdf::gfx::ImageColorMap *color_map, bool interpolate, const int *mask_colors, bool inline_image)
-#else
-  void drawImage(pdf::gfx::State *state, pdf::Object *object, pdf::Stream *stream, int width, int height,
-    pdf::gfx::ImageColorMap *color_map, bool interpolate, int *mask_colors, bool inline_image)
-#endif
   {
     if (is_foreground_color_map(color_map) || config.no_render)
     {
@@ -389,13 +377,8 @@ public:
 
   bool interpretType3Chars() { return false; }
 
-#if POPPLER_VERSION >= 8200
   void drawChar(pdf::gfx::State *state, double x, double y, double dx, double dy, double origin_x, double origin_y,
     CharCode code, int n_bytes, const Unicode *unistr, int length)
-#else
-  void drawChar(pdf::gfx::State *state, double x, double y, double dx, double dy, double origin_x, double origin_y,
-    CharCode code, int n_bytes, Unicode *unistr, int length)
-#endif
   {
     double pox, poy, pdx, pdy, px, py, pw, ph;
     x -= origin_x; y -= origin_y;
@@ -475,11 +458,7 @@ public:
     switch (link_action->getKind())
     {
     case actionURI:
-#if POPPLER_VERSION >= 8600
       uri = dynamic_cast<pdf::link::URI*>(link_action)->getURI();
-#else
-      uri += pdf::get_c_string(dynamic_cast<pdf::link::URI*>(link_action)->getURI());
-#endif
       break;
     case actionGoTo:
     {
@@ -519,16 +498,12 @@ public:
       // L10N: OCG stands for “Optional Content Group” (see PDF Reference v1.7, §4.10.1)
       debug(1) << _("Warning: Unable to convert link with a set-OCG-state action") << std::endl;
       return;
-#if POPPLER_VERSION >= 6400
     case actionHide:
       debug(1) << _("Warning: Unable to convert link with a hide action") << std::endl;
       return;
-#endif
-#if POPPLER_VERSION >= 8900
     case actionResetForm:
       debug(1) << _("Warning: Unable to convert link with a reset-form action") << std::endl;
       return;
-#endif
     case actionUnknown:
     default:
       debug(1) << _("Warning: Unknown link action") << std::endl;
@@ -724,19 +699,11 @@ static void pdf_outline_to_djvu_outline(pdf::Object *node, pdf::Catalog *catalog
         std::unique_ptr<pdf::link::Action> link_action;
         if (!pdf::dict_lookup(current, "Dest", &destination)->isNull())
         {
-#if POPPLER_VERSION >= 8600
           link_action = pdf::link::Action::parseDest(&destination);
-#else
-          link_action.reset(pdf::link::Action::parseDest(&destination));
-#endif
         }
         else if (!pdf::dict_lookup(current, "A", &destination)->isNull())
         {
-#if POPPLER_VERSION >= 8600
           link_action = pdf::link::Action::parseAction(&destination);
-#else
-          link_action.reset(pdf::link::Action::parseAction(&destination));
-#endif
         }
         else
           throw NoPageForBookmark();
@@ -1036,7 +1003,7 @@ public:
   {
     size_t size = this->components.size();
     debug(3)
-      << string_printf(ngettext(
+      << string_printf(i18n::ngettext(
            "creating multi-page indirect document (%zu page)",
            "creating multi-page indirect document (%zu pages)",
            size), size
@@ -1691,7 +1658,7 @@ static int xmain(int argc, char * const argv[])
     {
       size_t page_size = component.size();
       debug(2)
-        << string_printf(ngettext("%zu bytes out", "%zu bytes out", page_size), page_size)
+        << string_printf(i18n::ngettext("%zu bytes out", "%zu bytes out", page_size), page_size)
         << std::endl;
       djvu_pages_size += page_size;
     }
