@@ -1,4 +1,5 @@
 *.o
+/build/
 /aclocal.m4
 /autoconf.hh
 /autoconf.hh.in
