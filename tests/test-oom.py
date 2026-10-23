@@ -39,7 +39,7 @@ def vm_limit(limit):
         limit = lim_hard
     resource.setrlimit(RLIMIT_AS, (limit, lim_hard))
     try:
-        r = case().run(sys.executable, '-c', code)
+        r = case().run_command(sys.executable, '-c', code)
         r.assert_(stdout=re.compile(''))
         (cld_soft_lim, cld_hard_lim) = map(int, r.stdout.splitlines())
         if cld_soft_lim != limit or cld_hard_lim != lim_hard:

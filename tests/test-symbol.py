@@ -13,12 +13,9 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 
-from __future__ import print_function
-
 import itertools
 
 from tools import (
-    assert_fail,
     case,
 )
 
@@ -28,9 +25,9 @@ def print_pgm(image):
     for line in image:
         print('|', end='')
         for px in line:
-            if px == '\xFF':
+            if px == 0xFF:
                 print('  ', end='')
-            elif px == '\0':
+            elif px == 0:
                 print('[]', end='')
             else:
                 print('()', end='')
@@ -45,8 +42,8 @@ class test(case):
         image = self.decode(fmt='pgm')
         print_pgm(image)
         for line in image:
-            sig = str.join('', (pixel for (pixel, _) in itertools.groupby(line)))
-            if sig not in {'\xFF', '\xFF\x00\xFF', '\xFF\x00\xFF\x00\xFF'}:
-                assert_fail('image does not look like uppercase delta')
+            sig = bytes(pixel for (pixel, _) in itertools.groupby(line))
+            if sig not in {b'\xFF', b'\xFF\x00\xFF', b'\xFF\x00\xFF\x00\xFF'}:
+                self.fail('image does not look like uppercase delta')
 
 # vim:ts=4 sts=4 sw=4 et

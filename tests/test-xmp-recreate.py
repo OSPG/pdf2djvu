@@ -13,13 +13,9 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 
-import xml.etree.cElementTree as etree
+import xml.etree.ElementTree as etree
 
 from tools import (
-    assert_equal,
-    assert_is_none,
-    assert_not_equal,
-    assert_uuid_urn,
     case,
     xml_find_text,
 )
@@ -30,7 +26,7 @@ class test(case):
     def test_verbatim(self):
         self.pdf2djvu('--verbatim-metadata').assert_()
         xmp = self.extract_xmp()
-        assert_is_none(xmp)
+        self.assertIsNone(xmp)
 
     def test_no_verbatim(self):
         self.require_feature('Exiv2')
@@ -38,11 +34,11 @@ class test(case):
         xmp = self.extract_xmp()
         xmp = etree.fromstring(xmp)
         dcformat = xml_find_text(xmp, 'dc:format')
-        assert_equal(dcformat, 'image/vnd.djvu')
+        self.assertEqual(dcformat, 'image/vnd.djvu')
         instance_id = xml_find_text(xmp, 'xmpMM:InstanceID')
         document_id = xml_find_text(xmp, 'xmpMM:DocumentID')
-        assert_not_equal(instance_id, document_id)
-        assert_uuid_urn(instance_id)
-        assert_uuid_urn(document_id)
+        self.assertNotEqual(instance_id, document_id)
+        self.assert_uuid_urn(instance_id)
+        self.assert_uuid_urn(document_id)
 
 # vim:ts=4 sts=4 sw=4 et

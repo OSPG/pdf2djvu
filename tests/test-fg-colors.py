@@ -14,7 +14,6 @@
 # General Public License for more details.
 
 from tools import (
-    assert_equal,
     case,
     count_colors,
 )
@@ -24,18 +23,14 @@ class test(case):
     # + fixed in 0.7.2 [72be13a3bc33817030125301fa34df3ddef63a10]
 
     def test(self):
-        yield self._test, 'default', 325
-        yield self._test, 'web', 43
-        yield self._test, 'black', 2
-
-    def _test(self, method, n):
-        self.pdf2djvu(
-            '--dpi=72',
-            '--fg-colors={method}'.format(method=method)
-        ).assert_()
-        image = self.decode()
-        image = self.decode(mode='foreground')
-        colors = count_colors(image)
-        assert_equal(len(colors), n)
+        for method, n in [('default', 325), ('web', 43), ('black', 2)]:
+            with self.subTest(method=method):
+                self.pdf2djvu(
+                    '--dpi=72',
+                    '--fg-colors={method}'.format(method=method)
+                ).assert_()
+                image = self.decode(mode='foreground')
+                colors = count_colors(image)
+                self.assertEqual(len(colors), n)
 
 # vim:ts=4 sts=4 sw=4 et

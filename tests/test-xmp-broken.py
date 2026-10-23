@@ -16,7 +16,6 @@
 import re
 
 from tools import (
-    assert_regex,
     case,
 )
 
@@ -24,13 +23,13 @@ class test(case):
     def test_verbatim(self):
         self.pdf2djvu('--verbatim-metadata').assert_()
         xmp = self.extract_xmp()
-        assert_regex(xmp, '<broken')
+        self.assertRegex(xmp, '<broken')
 
     def test_no_verbatim(self):
         self.require_feature('Exiv2')
         r = self.pdf2djvu()
         r.assert_(stderr=re.compile(r'\AXMP metadata error: XMP Toolkit error 201: .*\n\Z'))
         xmp = self.extract_xmp()
-        assert_regex(xmp, '<broken')
+        self.assertRegex(xmp, '<broken')
 
 # vim:ts=4 sts=4 sw=4 et

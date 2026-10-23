@@ -16,8 +16,6 @@
 import re
 
 from tools import (
-    assert_equal,
-    assert_in,
     case,
     count_colors,
 )
@@ -27,25 +25,19 @@ class test(case):
     def test(self):
         # Bug: https://github.com/jwilk/pdf2djvu/issues/47
         # + fixed in 0.7.2 [a10cfc8ac94e8f3b7e01e089056bf6a371d1a68d]
-        def t(i, n):
-            self.require_feature('GraphicsMagick')
-            self.pdf2djvu(
-                '--dpi=72',
-                '--fg-colors={0}'.format(i)
-            ).assert_()
-            image = self.decode()
-            image = self.decode(mode='foreground')
-            colors = count_colors(image)
-            if isinstance(n, tuple):
-                assert_in(len(colors), n)
-            else:
-                assert_equal(len(colors), n)
-        yield t, 1, 2
-        yield t, 2, 3
-        yield t, 4, 5
-        yield t, 255, 241
-        yield t, 256, (245, 256)
-        yield t, 652, (245, 325)
+        self.require_feature('GraphicsMagick')
+        for i, n in [(1, 2), (2, 3), (4, 5), (255, 241), (256, (245, 256)), (652, (245, 325))]:
+            with self.subTest(colors=i):
+                self.pdf2djvu(
+                    '--dpi=72',
+                    '--fg-colors={0}'.format(i)
+                ).assert_()
+                image = self.decode(mode='foreground')
+                colors = count_colors(image)
+                if isinstance(n, tuple):
+                    self.assertIn(len(colors), n)
+                else:
+                    self.assertEqual(len(colors), n)
 
     def test_range_error(self):
         def t(i):

@@ -15,11 +15,9 @@
 
 import os
 import re
-import xml.etree.cElementTree as etree
+import xml.etree.ElementTree as etree
 
 from tools import (
-    assert_equal,
-    assert_fail,
     case,
 )
 
@@ -28,7 +26,7 @@ srcdir = os.path.join(here, os.pardir)
 
 class test(case):
 
-    def __init__(self):
+    def setUp(self):
         path = os.path.join(srcdir, 'doc', 'changelog')
         with open(path) as fp:
             line = fp.readline()
@@ -38,16 +36,16 @@ class test(case):
         path = os.path.join(srcdir, 'doc', 'manpage.xml')
         for dummy_event, elem in etree.iterparse(path):
             if elem.tag == 'refmiscinfo' and elem.get('class') == 'version':
-                assert_equal(elem.text, self.changelog_version)
+                self.assertEqual(elem.text, self.changelog_version)
                 break
         else:
-            assert_fail("missing <refmiscinfo class='version'>")
+            self.fail("missing <refmiscinfo class='version'>")
 
     def test_executable(self):
         r = self.pdf2djvu('--version')
         r.assert_(stdout=re.compile(r'^pdf2djvu [0-9.]+\r?\n', re.M), rc=0)
         exec_version = r.stdout.splitlines()[0]
         _, exec_version = exec_version.split()
-        assert_equal(exec_version, self.changelog_version)
+        self.assertEqual(exec_version, self.changelog_version)
 
 # vim:ts=4 sts=4 sw=4 et

@@ -13,77 +13,26 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 
-from __future__ import print_function
-
 import ast
 import codecs
 import collections
 import inspect
 import locale
 import os
-import pipes
 import re
-import signal
-import subprocess as ipc
+import shlex
+import subprocess
 import sys
 
-from nose import SkipTest
-from nose.tools import (
-    assert_equal,
-    assert_greater,
-    assert_in,
-    assert_is,
-    assert_is_none,
-    assert_is_not,
-    assert_is_not_none,
-    assert_multi_line_equal,
-    assert_not_equal,
-    assert_regexp_matches as assert_regex,
-    assert_true,
-)
+from unittest import SkipTest, TestCase
 
-if {0} and not isinstance(b'', str):  # Python 2.7 is required
-    raise RuntimeError('Python 2.7 is required')
+_ppm_re = re.compile(br'P6\s+(\d+)\s+(\d+)\s+255\s(.*)\Z', re.DOTALL)
+_pgm_re = re.compile(br'P5\s+(\d+)\s+(\d+)\s+255\n(.*)\Z', re.DOTALL)
 
-re_type = type(re.compile(''))
+class ipc_result:
 
-def assert_fail(msg):
-    assert_true(False, msg=msg)  # pylint: disable=redundant-unittest-assert
-
-type(assert_multi_line_equal.__self__).maxDiff = None
-
-def _get_signal_names():
-    signame_pattern = re.compile('^SIG[A-Z0-9]*$')
-    data = {
-        name: getattr(signal, name)
-        for name in dir(signal)
-        if signame_pattern.match(name)
-    }
-    try:
-        if data['SIGABRT'] == data['SIGIOT']:
-            del data['SIGIOT']
-    except KeyError:
-        pass
-    try:
-        if data['SIGCHLD'] == data['SIGCLD']:
-            del data['SIGCLD']
-    except KeyError:
-        pass
-    return {no: name for name, no in data.iteritems()}
-
-class _ipc_rc(int):
-
-    _signal_names = _get_signal_names()
-
-    def __repr__(self):
-        try:
-            return '-' + self._signal_names[-self]
-        except KeyError:
-            return str(self)
-
-class ipc_result(object):
-
-    def __init__(self, stdout, stderr, rc):
+    def __init__(self, test_case, stdout, stderr, rc):
+        self.test_case = test_case
         self.stdout = stdout
         self.stderr = stderr
         self.rc = rc
@@ -91,18 +40,18 @@ class ipc_result(object):
     def assert_(self, stdout='', stderr='', rc=0):
         if stderr is None:
             pass
-        elif isinstance(stderr, re_type):
-            assert_regex(self.stderr, stderr)
+        elif isinstance(stderr, re.Pattern):
+            self.test_case.assertRegex(self.stderr, stderr)
         else:
-            assert_multi_line_equal(self.stderr, stderr)
+            self.test_case.assertEqual(self.stderr, stderr)
         if rc is not None:
-            assert_equal(_ipc_rc(self.rc), _ipc_rc(rc))
+            self.test_case.assertEqual(self.rc, rc)
         if stdout is None:
             pass
-        elif isinstance(stdout, re_type):
-            assert_regex(self.stdout, stdout)
+        elif isinstance(stdout, re.Pattern):
+            self.test_case.assertRegex(self.stdout, stdout)
         else:
-            assert_multi_line_equal(self.stdout, stdout)
+            self.test_case.assertEqual(self.stdout, stdout)
 
 def _get_locale_for_encoding(encoding):
     encoding = codecs.lookup(encoding).name
@@ -117,7 +66,7 @@ def _get_locale_for_encoding(encoding):
                 locale.setlocale(locale.LC_ALL, new_locale)
             except locale.Error:
                 continue
-            locale_encoding = locale.getpreferredencoding(False)
+            locale_encoding = locale.getencoding()
             locale_encoding = codecs.lookup(locale_encoding).name
             if encoding == locale_encoding:
                 return new_locale
@@ -127,7 +76,7 @@ def _get_locale_for_encoding(encoding):
         'locale {loc} is required'.format(loc=str.join(' or ', candidates))
     )
 
-class case(object):
+class case(TestCase):
 
     _pdf2djvu_command = os.getenv('pdf2djvu') or 'pdf2djvu'
     _feature_cache = {}
@@ -150,7 +99,8 @@ class case(object):
     def get_djvu_path(self):
         return self.get_source_path(strip_py=True) + '.djvu'
 
-    def run(self, *commandline, **kwargs):
+    def run_command(self, *commandline, **kwargs):
+        binary = kwargs.pop('binary', False)
         env = dict(os.environ,
             MALLOC_CHECK_='3',
             MALLOC_PERTURB_=str(0xA5),
@@ -164,23 +114,22 @@ class case(object):
                 continue
             raise TypeError('{key!r} is an invalid keyword argument for this function'.format(key=key))
         env['LANGUAGE'] = 'en'
-        print('$', str.join(' ', map(pipes.quote, commandline)))
-        try:
-            child = ipc.Popen(list(commandline),
-                stdout=ipc.PIPE,
-                stderr=ipc.PIPE,
-                env=env,
-            )
-        except OSError as exc:
-            exc.filename = commandline[0]
-            raise
-        stdout, stderr = child.communicate()
-        return ipc_result(stdout, stderr, child.returncode)
+        display_args = (
+            os.fsencode(arg).decode(sys.getfilesystemencoding(), errors='backslashreplace')
+            for arg in commandline
+        )
+        print('$', shlex.join(display_args))
+        result = subprocess.run(commandline, capture_output=True, env=env)
+        stdout, stderr = result.stdout, result.stderr
+        if not binary:
+            stdout = stdout.decode('UTF-8')
+        stderr = stderr.decode('UTF-8')
+        return ipc_result(self, stdout, stderr, result.returncode)
 
     def _pdf2djvu(self, *args, **kwargs):
         quiet = ('-q',) if kwargs.pop('quiet', True) else ()
         args = self.get_pdf2djvu_command() + quiet + (self.get_pdf_path(),) + args
-        result = self.run(*args, **kwargs)
+        result = self.run_command(*args, **kwargs)
         if os.getenv('pdf2djvu_win32'):
             result.stderr = result.stderr.replace('\r\n', '\n')
         if sys.platform.startswith('openbsd'):
@@ -197,10 +146,10 @@ class case(object):
         return self._pdf2djvu('-i', self.get_djvu_path(), *args)
 
     def djvudump(self, *args):
-        return self.run('djvudump', self.get_djvu_path(), *args)
+        return self.run_command('djvudump', self.get_djvu_path(), *args)
 
     def djvused(self, expr, **kwargs):
-        return self.run(
+        return self.run_command(
             'djvused',
             '-e', expr,
             self.get_djvu_path(),
@@ -208,7 +157,7 @@ class case(object):
         )
 
     def print_text(self):
-        return self.run('djvutxt', self.get_djvu_path())
+        return self.run_command('djvutxt', self.get_djvu_path())
 
     def print_outline(self):
         return self.djvused('print-outline')
@@ -223,28 +172,27 @@ class case(object):
         return self.djvused('ls', encoding='UTF-8')
 
     def decode(self, mode='color', fmt='ppm'):
-        args = []
-        r = self.run(
+        r = self.run_command(
             'ddjvu',
             self.get_djvu_path(),
             '-format={f}'.format(f=fmt),
             '-mode={m}'.format(m=mode),
             '-subsample=1',
-            *args
+            binary=True
         )
         r.assert_(stdout=None)
-        reader = dict(ppm=_read_ppm, pgm=_read_pgm)[fmt]
+        reader = dict(ppm=self._read_ppm, pgm=self._read_pgm)[fmt]
         return reader(r.stdout)
 
     def extract_xmp(self):
         r = self.djvused('output-ant')
-        assert_equal(r.stderr, '')
-        assert_equal(r.rc, 0)
+        self.assertEqual(r.stderr, '')
+        self.assertEqual(r.rc, 0)
         xmp_lines = [line for line in r.stdout.splitlines() if line.startswith('(xmp "')]
         if not xmp_lines:
             return None
         [xmp_line] = xmp_lines
-        assert_equal(xmp_line[-2:], '")')
+        self.assertEqual(xmp_line[-2:], '")')
         xmp = xmp_line[5:-1]
         xmp = ast.literal_eval(xmp)
         return xmp
@@ -258,7 +206,7 @@ class case(object):
             self._poppler_version = tuple(int(x) for x in match.group(1).split('.'))
         if self._poppler_version < version:
             str_version = str.join('.', (str(v) for v in version))
-            raise SkipTest('Poppler >= {ver} is required'.format(ver=str_version))
+            self.skipTest('Poppler >= {ver} is required'.format(ver=str_version))
 
     def require_feature(self, feature):
         try:
@@ -272,15 +220,56 @@ class case(object):
                 feature_enabled = feature in r.stdout
             self._feature_cache[feature] = feature_enabled
         if not feature_enabled:
-            raise SkipTest(feature + ' support missing')
+            self.skipTest(feature + ' support missing')
+
+    def _read_ppm(self, b):
+        match = _ppm_re.match(b)
+        self.assertIsNotNone(match)
+        (width, height, pixels) = match.groups()
+        width = int(width)
+        height = int(height)
+        pixels = memoryview(pixels)
+        pixels = [
+            [
+                pixels[(i + j):(i + j + 3)].tobytes()
+                for i in range(0, width * 3, 3)
+            ]
+            for j in range(0, len(pixels), width * 3)
+        ]
+        for line in pixels:
+            self.assertEqual(len(line), width)
+        self.assertEqual(len(pixels), height)
+        return pixels
+
+    def _read_pgm(self, b):
+        match = _pgm_re.match(b)
+        self.assertIsNotNone(match)
+        (width, height, pixels) = match.groups()
+        width = int(width)
+        height = int(height)
+        pixels = memoryview(pixels)
+        pixels = [
+            pixels[i:(i + width)].tobytes()
+            for i in range(0, len(pixels), width)
+        ]
+        for line in pixels:
+            self.assertEqual(len(line), width)
+        self.assertEqual(len(pixels), height)
+        return pixels
+
+    def assert_uuid_urn(self, uuid):
+        return self.assertRegex(
+            uuid,
+            _uuid_regexp,
+        )
 
 def rainbow(width, height):
     from PIL import Image
     from PIL import ImageColor
     image = Image.new('RGB', (width, height))
     pixels = image.load()
-    for x in xrange(width):
-        for y in xrange(height):
+    for x in range(width):
+        for y in range(height):
             hue = 255 * x // (width - 1)
             luminance = 100 * y // height
             color = ImageColor.getrgb('hsl({hue}, 100%, {lum}%)'.format(hue=hue, lum=luminance))
@@ -291,31 +280,11 @@ def checkboard(width, height):
     from PIL import Image
     image = Image.new('1', (width, height))
     pixels = image.load()
-    for x in xrange(width):
-        for y in xrange(height):
+    for x in range(width):
+        for y in range(height):
             color = 0xFF * ((x ^ y) & 1)
             pixels[x, y] = color
     return image
-
-_ppm_re = re.compile(r'P6\s+(\d+)\s+(\d+)\s+255\s(.*)\Z', re.DOTALL)
-def _read_ppm(b):
-    match = _ppm_re.match(b)
-    assert_is_not_none(match)
-    (width, height, pixels) = match.groups()
-    width = int(width)
-    height = int(height)
-    pixels = memoryview(pixels)
-    pixels = [
-        [
-            pixels[(i + j):(i + j + 3)].tobytes()
-            for i in range(0, width * 3, 3)
-        ]
-        for j in range(0, len(pixels), width * 3)
-    ]
-    for line in pixels:
-        assert_equal(len(line), width)
-    assert_equal(len(pixels), height)
-    return pixels
 
 def count_colors(image):
     result = collections.defaultdict(int)
@@ -323,23 +292,6 @@ def count_colors(image):
         for pixel in line:
             result[pixel] += 1
     return result
-
-_pgm_re = re.compile(r'P5\s+(\d+)\s+(\d+)\s+255\n(.*)\Z', re.DOTALL)
-def _read_pgm(b):
-    match = _pgm_re.match(b)
-    assert_is_not_none(match)
-    (width, height, pixels) = match.groups()
-    width = int(width)
-    height = int(height)
-    pixels = memoryview(pixels)
-    pixels = [
-        pixels[i:(i + width)]
-        for i in range(0, len(pixels), width)
-    ]
-    for line in pixels:
-        assert_equal(len(line), width)
-    assert_equal(len(pixels), height)
-    return pixels
 
 xml_ns = dict(
     dc='http://purl.org/dc/elements/1.1/',
@@ -355,27 +307,7 @@ _uuid_regexp = (
     .replace('X', '[0-9a-f]')
 )
 
-def assert_uuid_urn(uuid):
-    return assert_regex(
-        uuid,
-        _uuid_regexp,
-    )
-
 __all__ = [
-    # nose:
-    'assert_equal',
-    'assert_greater',
-    'assert_in',
-    'assert_is',
-    'assert_is_none',
-    'assert_is_not',
-    'assert_is_not_none',
-    'assert_multi_line_equal',
-    'assert_not_equal',
-    'assert_regex',
-    'assert_true',
-    # misc assert:
-    'assert_fail',
     # helper classes:
     'ipc_result',
     'case',
@@ -384,7 +316,6 @@ __all__ = [
     'checkboard',
     'count_colors',
     # XMP:
-    'assert_uuid_urn',
     'xml_find_text',
     'xml_ns',
 ]

@@ -41,8 +41,8 @@ For the ``-j``/``--jobs`` option, the compiler must support OpenMP_.
 
 To run the tests, the following software is needed:
 
-* Python 2.7;
-* nose_.
+* Python 3.13 or newer;
+* nose2_.
 
 To correctly convert some PDF files (mostly in Chinese, Japanese or
 Korean), the poppler-data_ package must be installed.
@@ -63,8 +63,8 @@ Korean), the poppler-data_ package must be installed.
    http://www.graphicsmagick.org/
 .. _OpenMP:
    https://www.openmp.org/
-.. _nose:
-   https://nose.readthedocs.io/
+.. _nose2:
+   https://docs.nose2.io/
 .. _poppler-data:
    https://poppler.freedesktop.org/poppler-data-0.4.9.tar.gz
 

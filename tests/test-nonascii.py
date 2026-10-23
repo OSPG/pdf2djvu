@@ -27,9 +27,10 @@ class test(case):
     # Bug: https://github.com/jwilk/pdf2djvu/issues/138
 
     def test_nonascii(self):
-        locale_encoding = locale.getpreferredencoding()
+        locale_encoding = locale.getencoding()
         try:
-            curr_sign = u'\xA4'.encode(locale_encoding)
+            curr_sign = '\xA4'
+            curr_sign.encode(locale_encoding)
         except UnicodeError:
             raise SkipTest('locale that can encode U+00A4 CURRENCY SIGN is required')
         tmpdir = tempfile.mkdtemp(prefix='pdf2djvu.test.')
@@ -42,7 +43,7 @@ class test(case):
                 pdf_path,
                 '-o', djvu_path
             ))
-            r = self.run(*cmdline)
+            r = self.run_command(*cmdline)
             r.assert_()
         finally:
             shutil.rmtree(tmpdir)

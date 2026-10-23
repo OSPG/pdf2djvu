@@ -28,14 +28,14 @@ in_files = $(wildcard *.in)
 
 generated_files = $(in_files:.in=) $(pdf_files)
 
-noseargs =
+nose2args =
 
 .PHONY: all
 ifeq "$(origin pdf2djvu)" "file"
 all: $(pdf2djvu)
 endif
 all: $(generated_files)
-	$(PYTHON) -c 'import nose; nose.main()' -v $(noseargs)
+	$(PYTHON) -m nose2 -B -v $(nose2args)
 
 .PHONY: prepare
 prepare: $(generated_files)
@@ -54,10 +54,10 @@ vcs-clean: clean
 	rm -f $(<:.tex=.log)
 
 %.pdf: %.pdf.in
-	./$(<)
+	$(PYTHON) $(<)
 
 %: %.in
-	./$(<)
+	$(PYTHON) $(<)
 
 ../pdf2djvu$(EXEEXT):
 	$(MAKE) -C ../

@@ -16,7 +16,6 @@
 import re
 
 from tools import (
-    assert_equal,
     case,
 )
 
@@ -33,10 +32,10 @@ class test(case):
             self.get_pdf_path(),
             '-o', self.get_pdf_path()
         ))
-        r = self.run(*cmdline)
+        r = self.run_command(*cmdline)
         r.assert_(stderr=re.compile('Input file is the same as output file:'), rc=1)
         with open(pdf_path, 'rb') as pdf_file:
             pdf_after = pdf_file.read()
-        assert_equal(pdf_before, pdf_after)
+        self.assertEqual(pdf_before, pdf_after)
 
 # vim:ts=4 sts=4 sw=4 et
